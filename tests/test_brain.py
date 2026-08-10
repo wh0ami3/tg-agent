@@ -204,7 +204,11 @@ def test_child_env():
         env = brain.child_env()
         parts = env["PATH"].split(os.pathsep)   # на Windows это ";"
         ok("venv моста в PATH первым", parts[0] == str(tmp), parts[0])
-        ok("папка claude в PATH (node для шебанга)", "/fake/bin" in parts)
+        # сравниваем через Path: str("/fake/bin/claude").parent на Windows
+        # даёт "\\fake\\bin", и сравнение с юниксовой строкой врёт
+        claude_dir = str(Path(brain.claude_path()).parent)
+        ok("папка claude в PATH (node для шебанга)", claude_dir in parts,
+           f"{claude_dir} ∉ {parts[:3]}")
         ok("исходный PATH сохранён", len(parts) > 2)
     finally:
         brain.HANDS_BIN = old

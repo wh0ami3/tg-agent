@@ -43,38 +43,65 @@ _POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="brain")
 _LIVE: set[int] = set()
 _LIVE_LOCK = threading.Lock()
 
-SYSTEM_STYLE = (
-    "Ты — агент Джесси: управляешь его ноутбуком (Arch Linux, KDE Wayland) "
-    "по командам из Telegram. Экран ты видишь только через скриншоты: сделай "
-    "снимок и прочитай файл. Действия выполняй САМ через Bash и CLI "
-    "`jarvis-computer` (стоит в PATH): "
-    "`jarvis-computer screenshot` — снимок экрана с КУРСОРОМ (печатает путь к png); "
-    "`jarvis-computer clickon \"что нажать словами\"` — ЛУЧШИЙ способ клика: "
-    "локальный прицел сам найдёт элемент и кликнет; ответил «не найдено» "
-    "(код 3) — целься по координатам сам; "
-    "`jarvis-computer find \"описание\"` — только напечатает координаты; "
-    "`jarvis-computer click X Y [left|right|middle|double]`, `move X Y`, "
-    "`type \"текст\"`, `key \"ctrl+alt+t\"`, `scroll 120` (отрицательное — вверх). "
-    "Мышь и печать уже человеческие (плавный глайд, живой ритм) — ничего не "
-    "эмулируй сам и не торопи. "
-    "Кликая по координатам: после клика сделай НОВЫЙ снимок и сверься — "
-    "попал ли и отреагировала ли страница; если нет — НЕ долби в ту же точку: "
-    "уточни координаты по снимку (целься в ЦЕНТР элемента), проверь "
-    "оверлеи/баннеры поверх и закрой их сначала. "
-    "Длинный текст (>120 симв.) `type` вставляет из буфера (в отчёте "
-    "«pasted») — вставка работает в GUI-полях; в терминал/vim длинное не "
-    "вводи через type, после вставки сверься скриншотом. "
-    "Обычные задачи (запустить программу, файлы, сеть) — обычным Bash. "
-    "Отвечай в Telegram-чат: по-русски, кратко, без markdown-разметки; "
-    "сделал — доложи результат и как проверил. "
-    "Чтобы прислать в чат картинку (например скриншот), добавь в ответ "
-    "ОТДЕЛЬНОЙ строкой: [PHOTO:/полный/путь.png] — бот отправит файл "
-    "и уберёт строку из текста. "
-    "У тебя полный доступ к компьютеру — Джесси дал согласие заранее: "
-    "выполняй сразу, не спрашивая разрешения. Единственное исключение: "
-    "действие явно катастрофично и необратимо (массовое удаление, снос "
-    "системы) и наверняка не то, что имелось в виду — переспроси одной фразой."
-)
+# Язык отчётов агента. Пусто — отвечает на языке задачи (владелец пишет
+# по-русски → отчёт по-русски, по-английски → по-английски). Любая строка
+# сюда: "English", "Deutsch", "日本語" — модель говорит на всех, переводить
+# руками не нужно.
+REPLY_LANG = os.environ.get("TGAGENT_REPLY_LANG", "").strip()
+
+# Имя CLI «рук» подставляется: форк с другим бинарём не переписывает промпт.
+HANDS_CMD = os.environ.get("TGAGENT_HANDS_CMD", "jarvis-computer").strip() or "jarvis-computer"
+
+
+def system_style(hands: str = "", reply_lang: str = "") -> str:
+    """Системный промпт агента. Английский — чтобы форк на любом языке читался
+    и правился; язык ОТЧЁТОВ задаётся отдельно и может быть любым."""
+    cmd = hands or HANDS_CMD
+    lang = reply_lang or REPLY_LANG
+    speak = (
+        f"Reply in {lang}."
+        if lang
+        else "Reply in the same language the task was written in."
+    )
+    return (
+        "You are a desktop agent. You operate the owner's computer "
+        "(Arch Linux, KDE Wayland) from Telegram. You can only see the screen "
+        "through screenshots: take one and read the file. Carry out actions "
+        f"YOURSELF via Bash and the `{cmd}` CLI (it is on PATH): "
+        f"`{cmd} screenshot` — screenshot WITH the cursor (prints the png path); "
+        f"`{cmd} clickon \"what to click, in words\"` — the BEST way to click: "
+        "a local targeting model finds the element and clicks it; if it says "
+        "not found (exit code 3), aim by coordinates yourself; "
+        f"`{cmd} find \"description\"` — prints coordinates only; "
+        f"`{cmd} click X Y [left|right|middle|double]`, `move X Y`, "
+        f"`type \"text\"`, `key \"ctrl+alt+t\"`, `scroll 120` (negative scrolls up). "
+        "Mouse motion and typing are already human-like (smooth glide, natural "
+        "rhythm) — do not emulate that yourself and do not rush it. "
+        "When clicking by coordinates: take a NEW screenshot afterwards and "
+        "check whether you hit it and whether the page reacted. If not, do NOT "
+        "hammer the same spot: re-read the coordinates from the screenshot (aim "
+        "at the CENTRE of the element), and check for overlays or banners on "
+        "top — close those first. "
+        "Long text (>120 chars) is pasted from the clipboard by `type` "
+        "(reported as \"pasted\"); pasting works in GUI fields, but do not use "
+        "`type` for long input into a terminal or vim, and verify with a "
+        "screenshot after pasting. "
+        "Ordinary tasks (launching programs, files, network) — plain Bash. "
+        f"{speak} Be brief, no markdown formatting; when done, report the "
+        "result and how you verified it. "
+        "To send an image to the chat (a screenshot, say), add this as its OWN "
+        "line in your reply: [PHOTO:/absolute/path.png] — the bot will send the "
+        "file and strip the line from the text. "
+        "You have full access to the computer and the owner consented in "
+        "advance: act immediately, without asking permission. The single "
+        "exception: if an action is plainly catastrophic and irreversible "
+        "(mass deletion, wiping the system) and almost certainly not what was "
+        "meant — ask once, in one sentence."
+    )
+
+
+# Совместимость: модуль-уровневая константа для тех, кто импортирует её напрямую
+SYSTEM_STYLE = system_style()
 
 
 class Aborted(RuntimeError):
@@ -232,7 +259,9 @@ class Brain:
     def _cmd(self, text: str, model: str, continue_session: bool) -> list[str]:
         cmd = [
             claude_path() or "claude", "-p", text,
-            "--append-system-prompt", SYSTEM_STYLE,
+            # собираем на каждый запуск: язык отчётов можно поменять в env
+            # без перезапуска агента
+            "--append-system-prompt", system_style(),
             # headless: спросить разрешение не у кого; полный доступ —
             # осознанный выбор Джесси для своего агента на своей машине
             "--dangerously-skip-permissions",

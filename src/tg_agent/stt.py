@@ -19,7 +19,10 @@ import httpx
 
 from . import config
 
-LANG = os.environ.get("TGAGENT_STT_LANG", "ru-RU")
+# Пусто (дефолт) — язык определяется автоматически: модель слышит любой.
+# Ставить стоит, только если распознавание путает похожие языки — тогда
+# подсказка вида "ru-RU" / "de-DE" / "ja-JP" повышает точность.
+LANG = os.environ.get("TGAGENT_STT_LANG", "").strip()
 GEMINI_STT_MODEL = os.environ.get("TGAGENT_STT_MODEL", "gemini-flash-latest")
 
 # один клиент на процесс: TLS-рукопожатие на каждый запрос стоило бы ~0.3-0.5 с
@@ -58,9 +61,10 @@ def _to_wav(data: bytes) -> bytes:
 
 
 def _recognize_gemini(wav: bytes, key: str) -> str:
+    hint = f" (expected: {LANG})" if LANG else ""
     prompt = (
-        "Transcribe this audio verbatim in its original language "
-        f"(expected: {LANG}). Output ONLY the transcription text, "
+        "Transcribe this audio verbatim in its original language"
+        f"{hint}. Output ONLY the transcription text, "
         "no comments or quotes. If there is no speech, output nothing."
     )
     resp = _HTTP.post(

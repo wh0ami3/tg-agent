@@ -83,13 +83,14 @@ silently ignored — no error message, no acknowledgement.
 
 ## Tests
 
-127 assertions across 4 suites, all passing:
+154 assertions across 5 suites, all passing:
 
 ```
-tests/test_brain.py       43
 tests/test_telegram.py    52
+tests/test_brain.py       43
+tests/test_strings.py     26
 tests/test_config.py      20
-tests/test_stt.py         12
+tests/test_stt.py         13
 ```
 
 Run them:
@@ -133,10 +134,55 @@ restarts on failure.
 | Variable | Default | What it does |
 |---|---|---|
 | `TGAGENT_TELEGRAM_TOKEN` | — | Bot token. Required. Lives in the `0600` env file, not the environment |
-| `TGAGENT_HANDS_BIN` | `~/Projects/jarvis-app/bridge/.venv/bin` | Directory holding the `jarvis-computer` CLI that drives mouse and keyboard. **Set this** — the default points at my own layout. If the directory doesn't exist, `jarvis-computer` is looked up on `PATH` |
+| `TGAGENT_HANDS_BIN` | `~/Projects/jarvis-app/bridge/.venv/bin` | Directory holding the CLI that drives mouse and keyboard. **Set this** — the default points at my own layout. If the directory doesn't exist, the command is looked up on `PATH` |
+| `TGAGENT_HANDS_CMD` | `jarvis-computer` | Name of that CLI. Change it and the system prompt follows |
+| `TGAGENT_LANG` | `en` | Language of the bot's own messages. See [Languages](#languages) |
+| `TGAGENT_LOCALE_DIR` | `~/.jarvis/tg-agent-locales` | Where to look for translation files |
+| `TGAGENT_REPLY_LANG` | — | Language the *agent* reports in. Free text: `English`, `Deutsch`, `日本語`. Empty means it replies in whatever language you wrote the task in |
 | `TGAGENT_TIMEOUT` | `900` | Seconds before a task is killed, process group and all |
-| `TGAGENT_STT_LANG` | `ru-RU` | Expected language of voice notes |
+| `TGAGENT_STT_LANG` | — | Hint for voice-note language (`de-DE`, `ru-RU`). Empty means auto-detect |
 | `TGAGENT_STT_MODEL` | `gemini-flash-latest` | Model used to transcribe voice notes |
+
+---
+
+## Languages
+
+Everything you see is language-independent, in three separate places.
+
+**1. What the agent says back to you.** Set `TGAGENT_REPLY_LANG` to any
+language, written any way you like — `Spanish`, `Deutsch`, `日本語`. The model
+speaks them natively, so nothing needs translating. Leave it empty and it
+replies in whichever language you wrote the task in.
+
+**2. Voice notes.** Auto-detected by default. Set `TGAGENT_STT_LANG` only if
+transcription confuses similar languages.
+
+**3. The bot's own 24 messages** — "Working…", "Nothing to stop", and so on.
+English and Russian ship built in. For anything else, drop a JSON file into
+the locale directory:
+
+```bash
+mkdir -p ~/.jarvis/tg-agent-locales
+cat > ~/.jarvis/tg-agent-locales/de.json <<'EOF'
+{
+  "working": "⏳ Arbeite…",
+  "done": "Fertig.",
+  "nothing_to_stop": "Nichts zu stoppen — es läuft keine Aufgabe."
+}
+EOF
+```
+
+```bash
+TGAGENT_LANG=de
+```
+
+You don't have to translate all of them. Missing keys fall back to English, so
+a half-finished translation mixes languages instead of breaking. A malformed
+file is ignored rather than crashing the bot — there are tests for both.
+
+Keys live in [`src/tg_agent/strings.py`](src/tg_agent/strings.py). A locale
+file also overrides the built-in languages, so you can reword the Russian or
+English without touching the code.
 
 ---
 

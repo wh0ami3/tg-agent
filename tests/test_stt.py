@@ -99,7 +99,18 @@ def test_gemini():
        and "g-key-test" not in call["url"])
     part = call["json"]["contents"][0]["parts"][0]
     ok("wav ушёл base64", part["inline_data"]["data"] == base64.b64encode(b"RIFF-wav-bytes").decode())
-    ok("язык в промпте", "ru-RU" in call["json"]["contents"][0]["parts"][1]["text"])
+    prompt = call["json"]["contents"][0]["parts"][1]["text"]
+    ok("без TGAGENT_STT_LANG подсказки языка нет (автоопределение)",
+       "expected:" not in prompt, prompt)
+    old_lang = stt.LANG
+    stt.LANG = "de-DE"
+    try:
+        fake_http.calls.clear()
+        asyncio.run(stt.transcribe(b"ogg"))
+        hinted = fake_http.calls[0]["json"]["contents"][0]["parts"][1]["text"]
+    finally:
+        stt.LANG = old_lang
+    ok("заданный язык уходит подсказкой", "expected: de-DE" in hinted, hinted)
     ok("температура 0", call["json"]["generationConfig"]["temperature"] == 0)
 
 

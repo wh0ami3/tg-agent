@@ -91,7 +91,7 @@ def test_system_style():
     print("— системный промпт —")
     s = brain.SYSTEM_STYLE
     ok("clickon в приоритете", "clickon" in s)
-    ok("подсказка «сверься, не долби»", "НЕ долби" in s and "ЦЕНТР" in s)
+    ok("подсказка «сверься, не долби»", "do NOT" in s and "CENTRE" in s)
     ok("протокол [PHOTO:]", "[PHOTO:" in s)
     ok("вставка длинного текста", "pasted" in s)
     ok("ответ для Telegram", "Telegram" in s)

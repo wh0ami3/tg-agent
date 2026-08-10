@@ -24,6 +24,7 @@ from pathlib import Path
 import httpx
 
 from . import brain, config, stt
+from .strings import t
 
 API = "https://api.telegram.org"
 _MAX_MSG = 4000  # лимит Telegram 4096 — режем с запасом
@@ -140,11 +141,7 @@ class AgentBot:
         if self._chat_id is None or not _INFLIGHT.exists():
             return
         _INFLIGHT.unlink(missing_ok=True)
-        await self._send(
-            http,
-            "Перезапустился. Задача, которую я делал, была прервана — "
-            "повторите, если нужно.",
-        )
+        await self._send(http, t("restarted"))
 
     async def _get_updates(self, http: httpx.AsyncClient) -> list[dict]:
         r = await http.get(
@@ -178,12 +175,7 @@ class AgentBot:
                 self._chat_id = chat_id
                 config.persist("TGAGENT_CHAT_ID", str(chat_id))
                 print(f"[tg-agent] хозяин зафиксирован: чат {chat_id}", flush=True)
-                await self._send(
-                    http,
-                    "К вашим услугам, сэр. Этот чат теперь ваш пульт от ноутбука.\n"
-                    "Пишите или наговаривайте, что сделать. "
-                    "Команды: /model, /screen, /stop, /reset",
-                )
+                await self._send(http, t("welcome"))
             else:
                 print(f"[tg-agent] сообщение до /start (чат {chat_id}) — игнорирую", flush=True)
             return
@@ -208,41 +200,32 @@ class AgentBot:
         parts = text.split()
         cmd = parts[0].split("@")[0].lower()
         if cmd == "/start":
-            await self._send(http, "Уже на связи, сэр. Команды: /model, /screen, /stop, /reset")
+            await self._send(http, t("already_up"))
         elif cmd == "/model":
             if len(parts) == 1:
-                await self._send(
-                    http,
-                    f"Модель мозга: {config.model()}\n"
-                    "Сменить: /model sonnet | opus | haiku",
-                )
+                await self._send(http, t("model_current", model=config.model()))
                 return
             m = parts[1].lower()
             if m in config.MODELS:
                 config.persist("TGAGENT_MODEL", m)
-                await self._send(http, f"Модель теперь {m}.")
+                await self._send(http, t("model_set", model=m))
             else:
-                await self._send(
-                    http, f"Не знаю модель «{parts[1]}». Варианты: sonnet, opus, haiku."
-                )
+                await self._send(http, t("model_unknown", model=parts[1]))
         elif cmd == "/screen":
             self._spawn(self._screen_task(http))
         elif cmd == "/stop":
             # abort латчит поколение стопа: умрёт и живой CLI, и всё, что
             # стояло в очереди или ещё готовилось (голосовое в STT)
             if self._brain.abort() or self._active > 0:
-                await self._send(http, "⛔ Останавливаю текущую задачу.")
+                await self._send(http, t("stopping"))
             else:
-                await self._send(http, "Нечего останавливать — задач в работе нет.")
+                await self._send(http, t("nothing_to_stop"))
         elif cmd == "/reset":
             aborted = self._brain.abort() or self._active > 0
             self._brain.reset()
-            await self._send(
-                http,
-                "⛔ Задачу остановил, диалог начат заново." if aborted else "Диалог начат заново.",
-            )
+            await self._send(http, t("reset_and_stopped" if aborted else "reset_only"))
         else:
-            await self._send(http, "Не знаю такой команды. Есть: /model, /screen, /stop, /reset")
+            await self._send(http, t("unknown_command"))
 
     # ----------------------------------------------------------------- задачи
     async def _task(self, http: httpx.AsyncClient, text: str,
@@ -251,7 +234,7 @@ class AgentBot:
             stop_gen = self._brain.stop_gen
         self._begin_work()
         try:
-            progress_id = await self._send_one(http, "⏳ Выполняю…")
+            progress_id = await self._send_one(http, t("working"))
             action: dict = {"txt": None}
 
             def on_tool(tool: str, detail: str) -> None:
@@ -269,15 +252,15 @@ class AgentBot:
                 if progress_id is not None:
                     with contextlib.suppress(Exception):
                         await asyncio.wait_for(
-                            self._edit(http, progress_id, "⚠ прервано перезапуском агента"), 3
+                            self._edit(http, progress_id, t("interrupted_by_restart")), 3
                         )
                 raise
             except brain.Aborted:
                 mark = "⛔"
-                reply = "⛔ Остановлено по вашей команде."
+                reply = t("aborted_by_owner")
             except Exception as e:  # noqa: BLE001 — сбой мозга = честный отчёт в чат
                 mark = "⚠"
-                reply = f"Не вышло: {e}"
+                reply = t("failed", error=e)
             finally:
                 updater.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -286,7 +269,7 @@ class AgentBot:
             if progress_id is not None:
                 await self._edit(http, progress_id, f"{mark} {took:.0f} с")
             clean, photos = _split_photos(reply or "")
-            await self._send(http, clean or ("Готово." if mark == "✅" else "Не вышло."))
+            await self._send(http, clean or t("done" if mark == "✅" else "not_done"))
             for p in photos[:5]:
                 await self._send_photo(http, p)
         finally:
@@ -311,19 +294,19 @@ class AgentBot:
         try:
             size = voice.get("file_size") or 0
             if size > _MAX_VOICE:
-                await self._send(http, "Голосовое слишком большое — не смогу скачать.")
+                await self._send(http, t("voice_too_big"))
                 return
             try:
                 data = await self._download(http, voice.get("file_id") or "")
                 text = await stt.transcribe(data)
             except Exception as e:  # noqa: BLE001 — сбой распознавания не роняет цикл
                 _log_err("голосовое не распозналось", e)
-                await self._send(http, "Не смог распознать голосовое.")
+                await self._send(http, t("voice_failed"))
                 return
             if not text:
-                await self._send(http, "Не расслышал — речи в голосовом не нашлось.")
+                await self._send(http, t("voice_empty"))
                 return
-            await self._send(http, f"Услышал: «{text}»")
+            await self._send(http, t("heard", text=text))
             await self._task(http, text, stop_gen)
         finally:
             self._end_work()
@@ -342,7 +325,7 @@ class AgentBot:
         try:
             path = await brain.take_screenshot()
         except Exception as e:  # noqa: BLE001
-            await self._send(http, f"Скриншот не вышел: {e}")
+            await self._send(http, t("screenshot_failed", error=e))
             return
         await self._send_photo(http, path)
 
@@ -394,10 +377,10 @@ class AgentBot:
         try:
             data = Path(path).read_bytes()
         except OSError:
-            await self._send(http, f"Файл не читается: {path}")
+            await self._send(http, t("file_unreadable", path=path))
             return
         if len(data) > _MAX_PHOTO:
-            await self._send(http, f"Картинка больше 10 МБ — не отправить: {path}")
+            await self._send(http, t("photo_too_big", path=path))
             return
         try:
             r = await http.post(

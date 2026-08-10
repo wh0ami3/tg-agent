@@ -1,6 +1,6 @@
 """Telegram-агент: long-polling Bot API, один хозяин, задачи мозгу, отчёты.
 
-Токен — TGAGENT_TELEGRAM_TOKEN из ~/.jarvis/tg-agent.env. В логи он не
+Токен — TGAGENT_TELEGRAM_TOKEN из конфига (см. paths.py). В логи он не
 попадает: URL Bot API содержит токен, поэтому ошибки httpx логируются
 ТОЛЬКО классом и HTTP-статусом (str(e) у httpx включает URL — не использовать).
 
@@ -24,6 +24,7 @@ from pathlib import Path
 import httpx
 
 from . import brain, config, stt
+from .paths import INFLIGHT
 from .strings import t
 
 API = "https://api.telegram.org"
@@ -35,7 +36,7 @@ _PHOTO_RE = re.compile(r"^[ \t]*\[PHOTO:([^\]\n]+)\][ \t]*$", re.MULTILINE)
 _PROGRESS_EVERY = 2.5  # частота правок прогресс-сообщения
 # маркер «задача в полёте»: переживший рестарт файл = задача была прервана
 # жёстко (SIGKILL/крэш) — хозяину об этом сообщается при следующем старте
-_INFLIGHT = Path.home() / ".jarvis" / "tg-agent.inflight"
+_INFLIGHT = INFLIGHT
 
 
 def _log_err(prefix: str, e: Exception) -> None:

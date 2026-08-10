@@ -12,7 +12,7 @@ import tg_agent.config as cfg
 
 _TMP = Path(tempfile.mkdtemp(prefix="tg-agent-test-"))
 cfg.CONFIG = _TMP / "tg-agent.env"
-cfg.JARVIS_ENV = _TMP / "env"
+cfg.GEMINI_ENV = _TMP / "env"
 
 PASS, FAIL = [], []
 
@@ -73,14 +73,14 @@ def test_model_validation():
 def test_gemini_key():
     print("— GEMINI_API_KEY из env Джарвиса —")
     ok("нет файла — пусто", cfg.gemini_key() == "")
-    cfg.JARVIS_ENV.write_text("JARVIS_BRAIN=claude\nGEMINI_API_KEY=g-key-1\n# comment\n")
+    cfg.GEMINI_ENV.write_text("JARVIS_BRAIN=claude\nGEMINI_API_KEY=g-key-1\n# comment\n")
     ok("ключ читается", cfg.gemini_key() == "g-key-1")
 
 
 def test_parse_tolerance():
     print("— парсер терпит рукописный файл —")
-    cfg.JARVIS_ENV.write_text("  KEY1 = v1 \nбез-равно\n#KEY2=x\nKEY3=a=b\n")
-    d = cfg._parse(cfg.JARVIS_ENV)
+    cfg.GEMINI_ENV.write_text("  KEY1 = v1 \nбез-равно\n#KEY2=x\nKEY3=a=b\n")
+    d = cfg._parse(cfg.GEMINI_ENV)
     ok("пробелы срезаются", d.get("KEY1") == "v1")
     ok("строка без = пропускается", "без-равно" not in d)
     ok("комментарий пропускается", "#KEY2" not in d and "KEY2" not in d)

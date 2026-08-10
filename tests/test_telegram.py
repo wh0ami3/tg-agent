@@ -18,7 +18,7 @@ from tg_agent.telegram import AgentBot, _split_photos
 
 _TMP = Path(tempfile.mkdtemp(prefix="tg-agent-tg-test-"))
 cfg.CONFIG = _TMP / "tg-agent.env"
-cfg.JARVIS_ENV = _TMP / "env"
+cfg.GEMINI_ENV = _TMP / "env"
 
 tg_mod._PROGRESS_EVERY = 0.01  # прогресс-цикл в тестах не должен спать 2.5 с
 tg_mod._INFLIGHT = _TMP / "inflight"  # маркер не в реальном ~/.jarvis

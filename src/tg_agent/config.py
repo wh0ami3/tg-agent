@@ -1,12 +1,13 @@
-"""Конфиг агента: ~/.jarvis/tg-agent.env (токен, хозяин, модель).
+"""Конфиг агента: токен, хозяин, модель — в config.env (см. paths.py).
 
-Отдельный от ~/.jarvis/env файл: у Джарвиса свой конфиг, у агента свой.
-Общий только GEMINI_API_KEY — он читается из env Джарвиса при каждом
-обращении (источник истины там: Джесси ротирует ключ в одном месте).
+Ключ Gemini для распознавания голосовых по умолчанию берётся оттуда же.
+TGAGENT_GEMINI_ENV_FILE указывает на ДРУГОЙ env-файл, если ключ уже живёт
+в одном месте на всю машину и ротируется там: читается на каждый запрос,
+поэтому смена ключа подхватывается без перезапуска.
 
 Запись — атомарная (tmp 0600 + replace), с отказом на перевод строки
-в ключе или значении: наследие грабли env-инъекции в мосте (KEY=VALUE
-с \n внутри значения дописывал бы чужую строку в файл).
+в ключе или значении: KEY=VALUE с \n внутри значения дописал бы в файл
+чужую строку.
 """
 
 from __future__ import annotations
@@ -14,8 +15,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-CONFIG = Path.home() / ".jarvis" / "tg-agent.env"
-JARVIS_ENV = Path.home() / ".jarvis" / "env"
+from .paths import CONFIG_FILE
+
+CONFIG = CONFIG_FILE
+
+# Откуда брать GEMINI_API_KEY. Пусто — из своего же конфига.
+_GEMINI_ENV_RAW = os.environ.get("TGAGENT_GEMINI_ENV_FILE", "").strip()
+GEMINI_ENV = Path(_GEMINI_ENV_RAW) if _GEMINI_ENV_RAW else CONFIG
 
 # /model показывает первые три; fable принимается, но не рекламируется
 MODELS = ("sonnet", "opus", "haiku", "fable")
@@ -84,4 +90,9 @@ def model() -> str:
 
 
 def gemini_key() -> str:
-    return _parse(JARVIS_ENV).get("GEMINI_API_KEY", "").strip()
+    """Ключ Gemini. Сначала окружение, потом env-файл: в systemd-юните
+    удобнее переменной, в конфиге — когда ключ общий на машину."""
+    return (
+        os.environ.get("GEMINI_API_KEY", "").strip()
+        or _parse(GEMINI_ENV).get("GEMINI_API_KEY", "").strip()
+    )

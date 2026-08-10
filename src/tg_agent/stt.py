@@ -1,9 +1,9 @@
 """Распознавание голосовых: ogg/opus → ffmpeg wav 16k mono → Gemini STT.
 
-Локальных LLM в этом проекте нет: VRAM ноута (4 ГБ) занята Whisper'ом
-Джарвиса — второй large-v3 не влезет. Gemini слушает wav напрямую;
-ключ GEMINI_API_KEY читается из ~/.jarvis/env на каждый запрос
-(источник истины там — ротация ключа подхватывается без рестарта).
+Локальной модели распознавания здесь нет намеренно: она заняла бы VRAM,
+которая нужна прицелу для поиска элементов на экране. Gemini слушает wav
+напрямую; GEMINI_API_KEY читается на каждый запрос, поэтому ротация ключа
+подхватывается без перезапуска.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def _recognize_gemini(wav: bytes, key: str) -> str:
 def _transcribe_sync(data: bytes) -> str:
     key = config.gemini_key()
     if not key:
-        raise RuntimeError("нет GEMINI_API_KEY в ~/.jarvis/env")
+        raise RuntimeError("нет GEMINI_API_KEY (ни в окружении, ни в конфиге)")
     return _recognize_gemini(_to_wav(data), key)
 
 

@@ -4,7 +4,7 @@
 
 1. Встроенные переводы: en (дефолт) и ru. Проверены живьём.
 2. Любой другой язык — JSON-файл `<код>.json` в папке локалей
-   (`~/.jarvis/tg-agent-locales`, переопределяется TGAGENT_LOCALE_DIR).
+   (`<конфиг>/locales`, переопределяется TGAGENT_LOCALE_DIR).
    Переводить всё не обязательно: недостающие ключи берутся из английского,
    поэтому частичный перевод не ломает бота, а просто смешивает языки.
 3. Язык ответов САМОГО агента (TGAGENT_REPLY_LANG) — свободная строка,
@@ -22,12 +22,11 @@ import json
 import os
 from pathlib import Path
 
+from .paths import LOCALE_DIR as _DEFAULT_LOCALE_DIR
+
 LANG = os.environ.get("TGAGENT_LANG", "en").strip().lower()
 
-LOCALE_DIR = Path(
-    os.environ.get("TGAGENT_LOCALE_DIR")
-    or Path.home() / ".jarvis" / "tg-agent-locales"
-)
+LOCALE_DIR = Path(os.environ.get("TGAGENT_LOCALE_DIR", "").strip() or _DEFAULT_LOCALE_DIR)
 
 COMMANDS = "/model, /screen, /stop, /reset"
 

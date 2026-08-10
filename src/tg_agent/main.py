@@ -1,7 +1,6 @@
 """Точка входа: конфиг → бот → вечный long-polling.
 
-Запускается из systemd --user (tg-agent.service); логи systemd пишет
-в ~/.jarvis/tg-agent.log (append). SIGTERM/SIGINT — чистая остановка:
+Запускается из systemd --user (tg-agent.service); логи забирает journald. SIGTERM/SIGINT — чистая остановка:
 фоновые задачи мягко гасятся (успевают пометить прогресс в чате),
 цикл останавливается, живые CLI мозга убиваются (иначе осиротевший
 claude продолжил бы действовать на компьютере без пульта).
@@ -20,7 +19,7 @@ import signal
 import time
 import traceback
 
-from . import brain, config, stt
+from . import brain, config, paths, stt
 from .telegram import AgentBot
 
 
@@ -47,10 +46,11 @@ async def _main(bot: AgentBot) -> None:
 
 
 def run() -> None:
+    paths.ensure()
     token = config.token()
     if not token:
         print(
-            "[tg-agent] нет TGAGENT_TELEGRAM_TOKEN в ~/.jarvis/tg-agent.env — "
+            f"[tg-agent] нет TGAGENT_TELEGRAM_TOKEN в {config.CONFIG} — "
             "жду появления (проверка раз в 60 с)",
             flush=True,
         )

@@ -108,6 +108,53 @@ Python · [uv](https://github.com/astral-sh/uv) · a single runtime dependency
 ffmpeg for audio · an LLM for reasoning and a vision model for locating
 on-screen elements.
 
+## Requirements
+
+Read this before cloning — **one of these you have to supply yourself.**
+
+| What | Why | How |
+|---|---|---|
+| Linux + Wayland | The hands CLI drives input through the desktop portal | Developed on Arch + KDE Plasma 6 |
+| Python 3.11+ and [uv](https://github.com/astral-sh/uv) | Runtime | `uv sync` handles the rest — the only runtime dependency is `httpx` |
+| `ffmpeg` | Converts Telegram voice notes to 16 kHz wav | Your package manager |
+| A Telegram bot token | The bot itself | [@BotFather](https://t.me/BotFather) → `/newbot` |
+| The `claude` CLI | The reasoning engine | [Claude Code](https://claude.com/claude-code). Any CLI accepting `-p`, `--append-system-prompt` and `--output-format stream-json` would work |
+| A Gemini API key | Transcribes voice notes | [Google AI Studio](https://aistudio.google.com/apikey). Text-only tasks work without it |
+| **A "hands" CLI** | Moves the mouse, types, screenshots | **You must supply this — see below** |
+| systemd (optional) | Autostart and restart-on-failure | Any supervisor works |
+
+### The hands CLI — read this
+
+This is the honest part. The tool I use, `jarvis-computer`, comes from a
+separate project of mine that is **not published**. So out of the box this
+repo will start, accept your messages, and then fail the moment it tries to
+touch the screen.
+
+What it needs is any executable on `PATH` implementing this contract. Point
+`TGAGENT_HANDS_CMD` at yours.
+
+| Command | Must do | Must output |
+|---|---|---|
+| `<cmd> screenshot [path]` | Capture the screen, cursor included | Print the file path as the **last line** of stdout |
+| `<cmd> clickon "description"` | Locate the described element and click it | Exit `0` on success, exit `3` if not found |
+| `<cmd> find "description"` | Locate the element without clicking | Print coordinates |
+| `<cmd> click X Y [left\|right\|middle\|double]` | Click at coordinates | — |
+| `<cmd> move X Y` | Move the cursor | — |
+| `<cmd> type "text"` | Type text (paste long text via clipboard) | — |
+| `<cmd> key "ctrl+alt+t"` | Press a key combination | — |
+| `<cmd> scroll N` | Scroll; negative scrolls up | — |
+
+Only `screenshot`, `click`, `type` and `key` are strictly required. `clickon`
+and `find` need a vision model to locate elements — without them the agent
+falls back to reading screenshots and computing coordinates itself, which
+works but is noticeably slower.
+
+On Wayland the input side is usually built on the
+[RemoteDesktop portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.RemoteDesktop.html);
+`ydotool` or `wtype` are simpler starting points if you don't need vision.
+
+---
+
 ## Install
 
 ```bash
@@ -116,28 +163,43 @@ cd tg-agent
 uv sync
 ```
 
-Put your bot token in `~/.jarvis/tg-agent.env`:
+Write your config to `~/.config/tg-agent/config.env`:
 
 ```
-TGAGENT_TELEGRAM_TOKEN=...
+TGAGENT_TELEGRAM_TOKEN=123456:your-token-here
+GEMINI_API_KEY=your-key-here
 ```
 
 ```bash
-chmod 600 ~/.jarvis/tg-agent.env
+chmod 600 ~/.config/tg-agent/config.env
 ```
 
-Then run it, or install the systemd user unit so it starts on login and
-restarts on failure.
+Point the agent at your hands CLI and run it:
+
+```bash
+TGAGENT_HANDS_CMD=your-hands-cli uv run python -m tg_agent.main
+```
+
+Then send `/start` to your bot from Telegram — the first chat to do so becomes
+the owner. Install a systemd user unit if you want it to survive logout.
+
+State the agent writes for itself (conversation history, the in-flight marker)
+lives in `~/.local/state/tg-agent`. Both directories follow the XDG spec and
+are overridable — see the table below.
 
 ### Configuration
 
 | Variable | Default | What it does |
 |---|---|---|
-| `TGAGENT_TELEGRAM_TOKEN` | — | Bot token. Required. Lives in the `0600` env file, not the environment |
-| `TGAGENT_HANDS_BIN` | `~/Projects/jarvis-app/bridge/.venv/bin` | Directory holding the CLI that drives mouse and keyboard. **Set this** — the default points at my own layout. If the directory doesn't exist, the command is looked up on `PATH` |
-| `TGAGENT_HANDS_CMD` | `jarvis-computer` | Name of that CLI. Change it and the system prompt follows |
+| `TGAGENT_TELEGRAM_TOKEN` | — | Bot token. Required. Lives in the `0600` config file, not the environment |
+| `GEMINI_API_KEY` | — | Voice-note transcription. Read from the environment first, then the config file, on **every request** — so rotating it needs no restart |
+| `TGAGENT_HANDS_CMD` | `jarvis-computer` | The hands CLI. **Set this** — see [Requirements](#requirements). The name is substituted into the system prompt |
+| `TGAGENT_HANDS_BIN` | — | Directory holding that CLI, if it isn't on `PATH` (a venv, or a systemd unit with a trimmed environment) |
+| `TGAGENT_CONFIG_DIR` | `~/.config/tg-agent` | Config and locale files |
+| `TGAGENT_STATE_DIR` | `~/.local/state/tg-agent` | Conversation history and the in-flight marker |
+| `TGAGENT_GEMINI_ENV_FILE` | the config file | Read `GEMINI_API_KEY` from a different env file — useful when one key is shared machine-wide and rotated in one place |
 | `TGAGENT_LANG` | `en` | Language of the bot's own messages. See [Languages](#languages) |
-| `TGAGENT_LOCALE_DIR` | `~/.jarvis/tg-agent-locales` | Where to look for translation files |
+| `TGAGENT_LOCALE_DIR` | `<config dir>/locales` | Where to look for translation files |
 | `TGAGENT_REPLY_LANG` | — | Language the *agent* reports in. Free text: `English`, `Deutsch`, `日本語`. Empty means it replies in whatever language you wrote the task in |
 | `TGAGENT_TIMEOUT` | `900` | Seconds before a task is killed, process group and all |
 | `TGAGENT_STT_LANG` | — | Hint for voice-note language (`de-DE`, `ru-RU`). Empty means auto-detect |
@@ -162,8 +224,8 @@ English and Russian ship built in. For anything else, drop a JSON file into
 the locale directory:
 
 ```bash
-mkdir -p ~/.jarvis/tg-agent-locales
-cat > ~/.jarvis/tg-agent-locales/de.json <<'EOF'
+mkdir -p ~/.config/tg-agent/locales
+cat > ~/.config/tg-agent/locales/de.json <<'EOF'
 {
   "working": "⏳ Arbeite…",
   "done": "Fertig.",

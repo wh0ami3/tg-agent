@@ -1,7 +1,8 @@
-"""Мозг агента — claude CLI (headless, подписка MAX) с руками jarvis-computer.
+"""Мозг агента — claude CLI (headless) с «руками»: внешним CLI, который
+двигает мышь, печатает и снимает экран (см. TGAGENT_HANDS_CMD).
 
-Диалоговая память: --continue в своей папке ~/.jarvis/tg-agent-claude —
-с диалогами Джарвиса (~/.jarvis/claude-<порт>) не пересекается.
+Диалоговая память: --continue в своей папке состояния, отдельной от любых
+других сессий claude на машине.
 
 Запуск CLI — stream-json: по ходу работы видны tool_use-события (лента
 «что агент сейчас делает»), финальный текст — из события result.
@@ -23,16 +24,14 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-WORKDIR = Path.home() / ".jarvis" / "tg-agent-claude"
+from .paths import CLAUDE_WORKDIR
 
-# Папка с CLI «рук» (jarvis-computer). Дефолт — venv моста Джарвиса на моей
-# машине; у любого другого установщика путь свой, поэтому переопределяется
-# переменной окружения TGAGENT_HANDS_BIN. Если папки нет, jarvis-computer
-# ищется в обычном PATH.
-HANDS_BIN = Path(
-    os.environ.get("TGAGENT_HANDS_BIN")
-    or Path.home() / "Projects" / "jarvis-app" / "bridge" / ".venv" / "bin"
-)
+WORKDIR = CLAUDE_WORKDIR
+
+# Папка с CLI «рук». Пусто — команда ищется в обычном PATH, что и нужно
+# большинству. Переменная нужна, когда CLI лежит в venv или вне PATH
+# (например, в юните systemd с урезанным окружением).
+HANDS_BIN = Path(os.environ.get("TGAGENT_HANDS_BIN", "").strip() or ".")
 
 TIMEOUT = int(os.environ.get("TGAGENT_TIMEOUT", "900") or "900")
 
@@ -164,13 +163,13 @@ def _session_env() -> dict[str, str]:
 
 
 def child_env() -> dict[str, str]:
-    """env для claude и jarvis-computer: поверх os.environ — свежий env
-    сессии, PATH дополняется bin'ом venv моста (там jarvis-computer)
-    и папкой claude (рядом лежит node для шебанга)."""
+    """env для claude и CLI рук: поверх os.environ — свежий env сессии,
+    PATH дополняется папкой рук (если задана) и папкой claude (рядом
+    лежит node для шебанга)."""
     env = dict(os.environ)
     env.update(_session_env())
     extra: list[str] = []
-    if HANDS_BIN.is_dir():
+    if str(HANDS_BIN) != "." and HANDS_BIN.is_dir():
         extra.append(str(HANDS_BIN))
     if (c := claude_path()) is not None:
         extra.append(str(Path(c).parent))
@@ -389,10 +388,10 @@ class Brain:
 
 
 async def take_screenshot() -> str:
-    """Скриншот через jarvis-computer (спектакль с курсором); печатает путь."""
-    exe = str(HANDS_BIN / "jarvis-computer")
+    """Скриншот через CLI рук (с курсором); команда печатает путь к файлу."""
+    exe = str(HANDS_BIN / HANDS_CMD)
     if not Path(exe).exists():
-        exe = "jarvis-computer"
+        exe = HANDS_CMD
     proc = await asyncio.create_subprocess_exec(
         exe, "screenshot",
         stdout=asyncio.subprocess.PIPE,
@@ -409,5 +408,5 @@ async def take_screenshot() -> str:
     lines = out.decode(errors="replace").strip().splitlines()
     path = lines[-1].strip() if lines else ""
     if not path or not Path(path).is_file():
-        raise RuntimeError("jarvis-computer не вернул путь к снимку")
+        raise RuntimeError(f"{HANDS_CMD} не вернул путь к снимку")
     return path

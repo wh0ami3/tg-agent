@@ -48,8 +48,10 @@ _LIVE_LOCK = threading.Lock()
 # руками не нужно.
 REPLY_LANG = os.environ.get("TGAGENT_REPLY_LANG", "").strip()
 
-# Имя CLI «рук» подставляется: форк с другим бинарём не переписывает промпт.
-HANDS_CMD = os.environ.get("TGAGENT_HANDS_CMD", "jarvis-computer").strip() or "jarvis-computer"
+# Имя CLI «рук» подставляется в промпт: форк с другим бинарём его не переписывает.
+# Дефолт — руки из комплекта (ставятся вместе с пакетом как console-script).
+DEFAULT_HANDS_CMD = "tg-agent-hands"
+HANDS_CMD = os.environ.get("TGAGENT_HANDS_CMD", "").strip() or DEFAULT_HANDS_CMD
 
 
 def system_style(hands: str = "", reply_lang: str = "") -> str:

@@ -83,55 +83,86 @@ silently ignored — no error message, no acknowledgement.
 
 ## Tests
 
-159 assertions across 5 suites, all passing:
+196 assertions across 6 suites, all passing:
 
 ```
 tests/test_telegram.py    52
 tests/test_brain.py       48
+tests/test_hands.py       37
 tests/test_strings.py     26
 tests/test_config.py      20
 tests/test_stt.py         13
 ```
 
-Run them:
+Run one:
 
 ```bash
-uv run python tests/test_brain.py
+uv run python tests/test_hands.py
 ```
+
+The hands suite stubs out `pyautogui`, so it passes identically on Windows,
+macOS and Linux and never moves a real cursor.
 
 ---
 
 ## Stack
 
-Python · [uv](https://github.com/astral-sh/uv) · a single runtime dependency
-(`httpx`) · Telegram Bot API long-polling · systemd user service ·
-ffmpeg for audio · an LLM for reasoning and a vision model for locating
-on-screen elements.
+Python · [uv](https://github.com/astral-sh/uv) · one runtime dependency
+(`httpx`; hands add `pyautogui` as an optional extra) · Telegram Bot API
+long-polling · ffmpeg for audio · an LLM for reasoning.
 
 ## Requirements
 
-Read this before cloning — **one of these you have to supply yourself.**
+Read this before cloning.
 
 | What | Why | How |
 |---|---|---|
-| Linux + Wayland | The hands CLI drives input through the desktop portal | Developed on Arch + KDE Plasma 6 |
+| Windows, macOS or Linux | — | Bot logic is portable; hands are the platform-specific part |
 | Python 3.11+ and [uv](https://github.com/astral-sh/uv) | Runtime | `uv sync` handles the rest — the only runtime dependency is `httpx` |
 | `ffmpeg` | Converts Telegram voice notes to 16 kHz wav | Your package manager |
 | A Telegram bot token | The bot itself | [@BotFather](https://t.me/BotFather) → `/newbot` |
 | The `claude` CLI | The reasoning engine | [Claude Code](https://claude.com/claude-code). Any CLI accepting `-p`, `--append-system-prompt` and `--output-format stream-json` would work |
 | A Gemini API key | Transcribes voice notes | [Google AI Studio](https://aistudio.google.com/apikey). Text-only tasks work without it |
-| **A "hands" CLI** | Moves the mouse, types, screenshots | **You must supply this — see below** |
+| Hands | Move the mouse, type, screenshot | **Included** (`uv sync --extra hands`). Wayland is the exception — see below |
 | systemd (optional) | Autostart and restart-on-failure | Any supervisor works |
 
-### The hands CLI — read this
+### The hands CLI
 
-This is the honest part. The tool I use, `jarvis-computer`, comes from a
-separate project of mine that is **not published**. So out of the box this
-repo will start, accept your messages, and then fail the moment it tries to
-touch the screen.
+Hands ship with the project as `tg-agent-hands`, installed alongside the bot:
 
-What it needs is any executable on `PATH` implementing this contract. Point
-`TGAGENT_HANDS_CMD` at yours.
+```bash
+uv sync --extra hands
+tg-agent-hands selftest
+```
+
+`selftest` tells you in one line whether hands will work on this machine —
+run it before anything else.
+
+| Platform | Works out of the box? |
+|---|---|
+| **Windows** | Yes |
+| **macOS** | Yes, after granting Accessibility **and** Screen Recording to your terminal |
+| **Linux / X11** | Yes |
+| **Linux / Wayland** | **No** — supply an external CLI (below) |
+
+Wayland compositors deliberately refuse synthetic input from ordinary
+applications, so `pyautogui` cannot work there. `tg-agent-hands` detects this
+and says so instead of failing obscurely. A Wayland implementation has to go
+through the
+[RemoteDesktop portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.RemoteDesktop.html).
+
+**One capability is missing from the bundled hands:** `clickon` and `find`
+locate an element from a plain-language description, which needs a
+vision-language model. The bundled version returns exit code `3` (not found)
+for both, and the agent falls back to reading a screenshot and computing
+coordinates itself. That works — it's just slower and less accurate. My own
+implementation uses a local Qwen-VL for targeting; it lives in a separate,
+unpublished project.
+
+### Bringing your own hands
+
+Any executable implementing this contract works. Point `TGAGENT_HANDS_CMD`
+at it and the system prompt follows automatically.
 
 | Command | Must do | Must output |
 |---|---|---|
@@ -144,14 +175,15 @@ What it needs is any executable on `PATH` implementing this contract. Point
 | `<cmd> key "ctrl+alt+t"` | Press a key combination | — |
 | `<cmd> scroll N` | Scroll; negative scrolls up | — |
 
-Only `screenshot`, `click`, `type` and `key` are strictly required. `clickon`
-and `find` need a vision model to locate elements — without them the agent
-falls back to reading screenshots and computing coordinates itself, which
-works but is noticeably slower.
+Only `screenshot`, `click`, `type` and `key` are strictly required.
 
-On Wayland the input side is usually built on the
-[RemoteDesktop portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.RemoteDesktop.html);
-`ydotool` or `wtype` are simpler starting points if you don't need vision.
+Exit codes are part of the contract: `0` done, `2` bad arguments, `3` element
+not found, `4` hands unavailable on this machine. The agent treats `3` and `4`
+differently — one means "aim by coordinates instead", the other means "stop
+trying".
+
+On Linux, `ydotool` and `wtype` are reasonable starting points if you only
+need input and not vision.
 
 ---
 
@@ -160,7 +192,8 @@ On Wayland the input side is usually built on the
 ```bash
 git clone https://github.com/wh0ami3/tg-agent
 cd tg-agent
-uv sync
+uv sync --extra hands
+uv run tg-agent-hands selftest
 ```
 
 Write your config to `~/.config/tg-agent/config.env`:
@@ -174,10 +207,10 @@ GEMINI_API_KEY=your-key-here
 chmod 600 ~/.config/tg-agent/config.env
 ```
 
-Point the agent at your hands CLI and run it:
+Run it:
 
 ```bash
-TGAGENT_HANDS_CMD=your-hands-cli uv run python -m tg_agent.main
+uv run tg-agent
 ```
 
 Then send `/start` to your bot from Telegram — the first chat to do so becomes
@@ -193,7 +226,7 @@ are overridable — see the table below.
 |---|---|---|
 | `TGAGENT_TELEGRAM_TOKEN` | — | Bot token. Required. Lives in the `0600` config file, not the environment |
 | `GEMINI_API_KEY` | — | Voice-note transcription. Read from the environment first, then the config file, on **every request** — so rotating it needs no restart |
-| `TGAGENT_HANDS_CMD` | `jarvis-computer` | The hands CLI. **Set this** — see [Requirements](#requirements). The name is substituted into the system prompt |
+| `TGAGENT_HANDS_CMD` | `tg-agent-hands` | The hands CLI. Change it to use your own; the name is substituted into the system prompt |
 | `TGAGENT_HANDS_BIN` | — | Directory holding that CLI, if it isn't on `PATH` (a venv, or a systemd unit with a trimmed environment) |
 | `TGAGENT_CONFIG_DIR` | `~/.config/tg-agent` | Config and locale files |
 | `TGAGENT_STATE_DIR` | `~/.local/state/tg-agent` | Conversation history and the in-flight marker |

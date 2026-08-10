@@ -1,14 +1,27 @@
 [project]
 name = "tg-agent"
-version = "0.1.0"
-description = "ТГ-агент: управление ноутбуком Джесси из Telegram (мозг — claude CLI, руки — jarvis-computer)"
+version = "0.2.0"
+description = "Control your computer from Telegram: voice or text in, mouse and keyboard out"
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27",
 ]
 
+[project.optional-dependencies]
+# Руки в комплекте. Отдельным extra, потому что тянут Pillow и системные
+# зависимости, а на Wayland всё равно не работают — там нужен внешний CLI.
+hands = [
+    "pyautogui>=0.9.54",
+    "pyperclip>=1.8",
+    "pillow>=10.0",
+    "python-xlib>=0.33; sys_platform == 'linux'",
+    "pyobjc-core>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
+]
+
 [project.scripts]
 tg-agent = "tg_agent.main:run"
+tg-agent-hands = "tg_agent.hands.cli:main"
 
 [build-system]
 requires = ["hatchling"]

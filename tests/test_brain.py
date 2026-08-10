@@ -75,8 +75,9 @@ def test_cmd():
     cmd = b._cmd("открой ютуб", "sonnet", False)
     ok("клод по найденному пути", cmd[0] == "/fake/bin/claude")
     ok("промпт на месте", cmd[1:3] == ["-p", "открой ютуб"])
+    # имя рук берём из модуля, а не константой: дефолт менялся и ещё может
     ok("свой системный промпт", "--append-system-prompt" in cmd
-       and "jarvis-computer" in cmd[cmd.index("--append-system-prompt") + 1])
+       and brain.HANDS_CMD in cmd[cmd.index("--append-system-prompt") + 1])
     ok("полный доступ", "--dangerously-skip-permissions" in cmd)
     ok("stream-json + verbose", "--output-format" in cmd and "--verbose" in cmd)
     ok("модель пробрасывается", cmd[cmd.index("--model") + 1] == "sonnet")

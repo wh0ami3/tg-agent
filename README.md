@@ -6,6 +6,26 @@ looks at your screen, moves the mouse, clicks, types, and reports back.**
 No SSH. No exact commands. You describe the task in plain language; the agent
 takes a screenshot, finds the element it needs, and does it.
 
+> ### ⚠️ Read this before you run it
+>
+> This agent gives a language model **unrestricted control of your machine**.
+> It runs the reasoning CLI with `--dangerously-skip-permissions`, which means
+> the model executes shell commands and GUI actions without asking you first.
+> That is a deliberate design choice — a headless bot has nobody to ask — but
+> it means:
+>
+> - **Do not run this on a machine you cannot afford to lose.** Use a spare
+>   box, a VM, or a dedicated user account.
+> - **Anything on your screen is untrusted input.** The agent reads the screen
+>   to decide what to do, so a web page, document, or email can contain text
+>   aimed at the model rather than at you. This is inherent to every
+>   computer-use agent, not specific to this one — but you should know it
+>   before pointing it at a browser.
+> - **The bot is single-owner by design.** The first `/start` claims it and
+>   every other chat is ignored — but guard the token like a password anyway.
+>
+> I run it on my own desktop and accept that trade-off. Decide for yourself.
+
 ---
 
 ## What it does
@@ -107,6 +127,43 @@ chmod 600 ~/.jarvis/tg-agent.env
 
 Then run it, or install the systemd user unit so it starts on login and
 restarts on failure.
+
+### Configuration
+
+| Variable | Default | What it does |
+|---|---|---|
+| `TGAGENT_TELEGRAM_TOKEN` | — | Bot token. Required. Lives in the `0600` env file, not the environment |
+| `TGAGENT_HANDS_BIN` | `~/Projects/jarvis-app/bridge/.venv/bin` | Directory holding the `jarvis-computer` CLI that drives mouse and keyboard. **Set this** — the default points at my own layout. If the directory doesn't exist, `jarvis-computer` is looked up on `PATH` |
+| `TGAGENT_TIMEOUT` | `900` | Seconds before a task is killed, process group and all |
+| `TGAGENT_STT_LANG` | `ru-RU` | Expected language of voice notes |
+| `TGAGENT_STT_MODEL` | `gemini-flash-latest` | Model used to transcribe voice notes |
+
+---
+
+## Security
+
+What this project does carefully:
+
+- **The token never reaches the logs.** The Bot API URL embeds the token, and
+  `str(e)` on an `httpx` error includes the URL — so errors are logged as the
+  exception class plus HTTP status only, never the raw exception. There is a
+  test asserting this.
+- **The speech-to-text key travels in a header, not a query parameter**, for
+  the same reason: query strings end up inside error text.
+- **Config writes are atomic and `0600`**, and refuse newlines in keys or
+  values so a crafted value can't append a line to the env file.
+- **Ownership is claimed only by `/start`.** Stray text from an unknown chat
+  cannot take the remote, and unknown chats get no reply at all — not even an
+  error, which would confirm the bot exists.
+- **Stopping kills the whole process group.** An orphaned reasoning CLI would
+  otherwise keep acting on the machine with nobody holding the remote.
+
+What it deliberately does *not* do — see the warning at the top:
+
+- It does not sandbox the model's actions.
+- It does not sanitise what it reads off the screen.
+
+Found something? Open an issue.
 
 ---
 

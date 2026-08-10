@@ -24,7 +24,15 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 WORKDIR = Path.home() / ".jarvis" / "tg-agent-claude"
-BRIDGE_VENV_BIN = Path.home() / "Projects" / "jarvis-app" / "bridge" / ".venv" / "bin"
+
+# Папка с CLI «рук» (jarvis-computer). Дефолт — venv моста Джарвиса на моей
+# машине; у любого другого установщика путь свой, поэтому переопределяется
+# переменной окружения TGAGENT_HANDS_BIN. Если папки нет, jarvis-computer
+# ищется в обычном PATH.
+HANDS_BIN = Path(
+    os.environ.get("TGAGENT_HANDS_BIN")
+    or Path.home() / "Projects" / "jarvis-app" / "bridge" / ".venv" / "bin"
+)
 
 TIMEOUT = int(os.environ.get("TGAGENT_TIMEOUT", "900") or "900")
 
@@ -128,8 +136,8 @@ def child_env() -> dict[str, str]:
     env = dict(os.environ)
     env.update(_session_env())
     extra: list[str] = []
-    if BRIDGE_VENV_BIN.is_dir():
-        extra.append(str(BRIDGE_VENV_BIN))
+    if HANDS_BIN.is_dir():
+        extra.append(str(HANDS_BIN))
     if (c := claude_path()) is not None:
         extra.append(str(Path(c).parent))
     if extra:
@@ -346,7 +354,7 @@ class Brain:
 
 async def take_screenshot() -> str:
     """Скриншот через jarvis-computer (спектакль с курсором); печатает путь."""
-    exe = str(BRIDGE_VENV_BIN / "jarvis-computer")
+    exe = str(HANDS_BIN / "jarvis-computer")
     if not Path(exe).exists():
         exe = "jarvis-computer"
     proc = await asyncio.create_subprocess_exec(

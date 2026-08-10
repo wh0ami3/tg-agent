@@ -185,8 +185,8 @@ def test_error():
 def test_child_env():
     print("— child_env: PATH дополняется —")
     tmp = Path(tempfile.mkdtemp(prefix="tg-agent-venvbin-"))
-    old = brain.BRIDGE_VENV_BIN
-    brain.BRIDGE_VENV_BIN = tmp
+    old = brain.HANDS_BIN
+    brain.HANDS_BIN = tmp
     try:
         env = brain.child_env()
         parts = env["PATH"].split(":")
@@ -194,7 +194,7 @@ def test_child_env():
         ok("папка claude в PATH (node для шебанга)", "/fake/bin" in parts)
         ok("исходный PATH сохранён", len(parts) > 2)
     finally:
-        brain.BRIDGE_VENV_BIN = old
+        brain.HANDS_BIN = old
 
 
 def test_tool_detail():

@@ -90,7 +90,7 @@ on-screen elements.
 ## Install
 
 ```bash
-git clone https://github.com/YOURNAME/tg-agent
+git clone https://github.com/wh0ami3/tg-agent
 cd tg-agent
 uv sync
 ```
@@ -112,7 +112,7 @@ restarts on failure.
 
 ## Status
 
-Running daily as a systemd service. Built by [Jesse](https://github.com/YOURNAME).
+Running daily as a systemd service. Built by [Jesse](https://github.com/wh0ami3).
 
 Available for freelance work on voice AI agents, Telegram automation and
 LLM integrations.

@@ -202,7 +202,7 @@ def test_child_env():
     brain.HANDS_BIN = tmp
     try:
         env = brain.child_env()
-        parts = env["PATH"].split(":")
+        parts = env["PATH"].split(os.pathsep)   # на Windows это ";"
         ok("venv моста в PATH первым", parts[0] == str(tmp), parts[0])
         ok("папка claude в PATH (node для шебанга)", "/fake/bin" in parts)
         ok("исходный PATH сохранён", len(parts) > 2)

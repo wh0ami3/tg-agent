@@ -205,7 +205,7 @@ def test_read():
     ok("нет файла", "нет файла" in b._read(str(tmp / "нет.png")))
     ok("пустой путь — отказ", "требует file_path" in b._read(""))
 
-    txt = tmp / "a.txt"; txt.write_text("привет")
+    txt = tmp / "a.txt"; txt.write_text("привет", encoding="utf-8")
     ok("не картинка — отсылка к Bash", "через Bash" in b._read(str(txt)))
 
     png = tmp / "s.png"; png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 100)

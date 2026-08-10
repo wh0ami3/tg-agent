@@ -30,7 +30,7 @@ DEFAULT_MODEL = "sonnet"
 
 def _parse(path: Path) -> dict[str, str]:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except OSError:
         return {}
     out: dict[str, str] = {}
@@ -56,7 +56,8 @@ def persist(key: str, value: str) -> None:
         print(f"[cfg] {key!r}: перевод строки в ключе/значении — отказ", flush=True)
         return
     try:
-        lines = CONFIG.read_text().splitlines() if CONFIG.exists() else []
+        lines = (CONFIG.read_text(encoding="utf-8").splitlines()
+                 if CONFIG.exists() else [])
     except OSError as e:
         print(f"[cfg] не читается {CONFIG} ({e}) — настройку не сохраняю", flush=True)
         return
@@ -67,7 +68,7 @@ def persist(key: str, value: str) -> None:
     tmp = CONFIG.with_name(f".tg-agent.env.{os.getpid()}.tmp")
     fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
         os.replace(tmp, CONFIG)
     except OSError:

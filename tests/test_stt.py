@@ -16,7 +16,7 @@ import tg_agent.stt as stt
 _TMP = Path(tempfile.mkdtemp(prefix="tg-agent-stt-test-"))
 cfg.CONFIG = _TMP / "tg-agent.env"
 cfg.GEMINI_ENV = _TMP / "env"
-cfg.GEMINI_ENV.write_text("GEMINI_API_KEY=g-key-test\n")
+cfg.GEMINI_ENV.write_text("GEMINI_API_KEY=g-key-test\n", encoding="utf-8")
 
 PASS, FAIL = [], []
 
@@ -125,13 +125,13 @@ def test_empty():
 
 def test_no_key():
     print("— без ключа —")
-    cfg.GEMINI_ENV.write_text("JARVIS_BRAIN=claude\n")
+    cfg.GEMINI_ENV.write_text("JARVIS_BRAIN=claude\n", encoding="utf-8")
     try:
         asyncio.run(stt.transcribe(b"x"))
         ok("нет ключа — RuntimeError", False)
     except RuntimeError as e:
         ok("нет ключа — RuntimeError", "GEMINI_API_KEY" in str(e))
-    cfg.GEMINI_ENV.write_text("GEMINI_API_KEY=g-key-test\n")
+    cfg.GEMINI_ENV.write_text("GEMINI_API_KEY=g-key-test\n", encoding="utf-8")
 
 
 test_to_wav()

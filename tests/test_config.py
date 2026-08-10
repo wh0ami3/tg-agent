@@ -27,26 +27,31 @@ def test_roundtrip():
     cfg.persist("TGAGENT_TELEGRAM_TOKEN", "123:abc")
     cfg.persist("TGAGENT_MODEL", "opus")
     ok("значения читаются", cfg.token() == "123:abc" and cfg.model() == "opus")
-    ok("права 0600", oct(cfg.CONFIG.stat().st_mode & 0o777) == "0o600",
-       oct(cfg.CONFIG.stat().st_mode & 0o777))
+    # У Windows нет POSIX-битов: там файл защищают ACL, а не режим. Проверять
+    # 0600 на нём бессмысленно — но и молчать нельзя, см. README про Windows.
+    if os.name != "posix":
+        print("  ⏭ права 0600 — POSIX-режимов нет на этой ОС")
+    else:
+        ok("права 0600", oct(cfg.CONFIG.stat().st_mode & 0o777) == "0o600",
+           oct(cfg.CONFIG.stat().st_mode & 0o777))
 
     cfg.persist("TGAGENT_MODEL", "haiku")
-    lines = cfg.CONFIG.read_text().splitlines()
+    lines = cfg.CONFIG.read_text(encoding="utf-8").splitlines()
     ok("перезапись не плодит дублей", sum(1 for l in lines if l.startswith("TGAGENT_MODEL=")) == 1)
     ok("токен пережил перезапись модели", cfg.token() == "123:abc")
 
     cfg.persist("TGAGENT_MODEL", "")
-    ok("пустое значение удаляет строку", "TGAGENT_MODEL" not in cfg.CONFIG.read_text())
+    ok("пустое значение удаляет строку", "TGAGENT_MODEL" not in cfg.CONFIG.read_text(encoding="utf-8"))
     ok("дефолт модели — sonnet", cfg.model() == "sonnet")
 
 
 def test_injection():
     print("— инъекция через перевод строки —")
-    before = cfg.CONFIG.read_text()
+    before = cfg.CONFIG.read_text(encoding="utf-8")
     cfg.persist("TGAGENT_MODEL", "opus\nTGAGENT_TELEGRAM_TOKEN=stolen")
-    ok("значение с \\n не записано", cfg.CONFIG.read_text() == before)
+    ok("значение с \\n не записано", cfg.CONFIG.read_text(encoding="utf-8") == before)
     cfg.persist("EVIL\nKEY", "1")
-    ok("ключ с \\n не записан", cfg.CONFIG.read_text() == before)
+    ok("ключ с \\n не записан", cfg.CONFIG.read_text(encoding="utf-8") == before)
 
 
 def test_chat_id():
@@ -73,13 +78,13 @@ def test_model_validation():
 def test_gemini_key():
     print("— GEMINI_API_KEY из env Джарвиса —")
     ok("нет файла — пусто", cfg.gemini_key() == "")
-    cfg.GEMINI_ENV.write_text("JARVIS_BRAIN=claude\nGEMINI_API_KEY=g-key-1\n# comment\n")
+    cfg.GEMINI_ENV.write_text("JARVIS_BRAIN=claude\nGEMINI_API_KEY=g-key-1\n# comment\n", encoding="utf-8")
     ok("ключ читается", cfg.gemini_key() == "g-key-1")
 
 
 def test_parse_tolerance():
     print("— парсер терпит рукописный файл —")
-    cfg.GEMINI_ENV.write_text("  KEY1 = v1 \nбез-равно\n#KEY2=x\nKEY3=a=b\n")
+    cfg.GEMINI_ENV.write_text("  KEY1 = v1 \nбез-равно\n#KEY2=x\nKEY3=a=b\n", encoding="utf-8")
     d = cfg._parse(cfg.GEMINI_ENV)
     ok("пробелы срезаются", d.get("KEY1") == "v1")
     ok("строка без = пропускается", "без-равно" not in d)

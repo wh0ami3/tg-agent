@@ -64,8 +64,9 @@ def run() -> None:
         f"хозяин {'зафиксирован' if owner else 'ещё не зафиксирован (жду /start)'}",
         flush=True,
     )
-    if not brain.Brain.available():
-        print("[tg-agent] ВНИМАНИЕ: claude CLI не найден — задачи будут падать", flush=True)
+    if hint := brain.probe():
+        print(f"[tg-agent] ВНИМАНИЕ: мозг «{brain.backend_name()}» не готов: {hint}"
+              " — задачи будут падать", flush=True)
     bot = AgentBot(token, owner)
     code = 0
     try:

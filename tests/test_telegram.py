@@ -5,6 +5,7 @@
 Всё офлайн: HTTP, мозг, STT и скриншот замоканы.
 """
 import asyncio
+import os
 import contextlib
 import io
 import sys
@@ -15,6 +16,8 @@ import tg_agent.config as cfg
 import tg_agent.strings as S
 import tg_agent.telegram as tg_mod
 from tg_agent.telegram import AgentBot, _split_photos
+
+os.environ["TGAGENT_BACKEND"] = "claude-cli"   # пин движка: забытый в env бэкенд не должен менять эти тесты
 
 _TMP = Path(tempfile.mkdtemp(prefix="tg-agent-tg-test-"))
 cfg.CONFIG = _TMP / "tg-agent.env"

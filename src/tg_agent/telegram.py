@@ -71,7 +71,7 @@ class AgentBot:
         self._token = token
         self._chat_id = chat_id
         self._offset = 0
-        self._brain = brain.Brain()
+        self._brain = brain.make_brain()
         self._bg: set[asyncio.Task] = set()
         # счётчик задач в полёте (включая подготовку голосовых): маркер
         # _INFLIGHT ставится на 0→1 и снимается на →0 — завершение одной
@@ -206,8 +206,8 @@ class AgentBot:
             if len(parts) == 1:
                 await self._send(http, t("model_current", model=config.model()))
                 return
-            m = parts[1].lower()
-            if m in config.MODELS:
+            m = config.normalize_model(parts[1])
+            if config.model_ok(m):
                 config.persist("TGAGENT_MODEL", m)
                 await self._send(http, t("model_set", model=m))
             else:

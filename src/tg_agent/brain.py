@@ -412,3 +412,53 @@ async def take_screenshot() -> str:
     if not path or not Path(path).is_file():
         raise RuntimeError(f"{HANDS_CMD} не вернул путь к снимку")
     return path
+
+
+# ───────────────────────────── выбор мозга ───────────────────────────────────
+# Импорты config и brain_api — ЛЕНИВЫЕ, внутри функций. У тех, кто остался на
+# claude CLI, не меняется ничего: ни импортов, ни зависимостей, ни поведения.
+
+
+def backend_name() -> str:
+    from . import config
+
+    return config.backend()
+
+
+def brain_class(name: str = ""):
+    from . import config
+
+    name = name or config.backend()
+    if name == "claude-cli":
+        return Brain
+    from . import brain_api
+
+    return brain_api.CLASSES[name]
+
+
+def make_brain() -> "Brain":
+    """Мозг по конфигу.
+
+    Конструктор обязан оставаться пустым: AgentBot создаётся ДО asyncio.run —
+    ни сети, ни ключей, ни обращений к event loop здесь быть не может.
+    """
+    return brain_class()()
+
+
+def probe() -> str:
+    """'' — мозг готов; иначе ОДНА фраза почему нет (уходит в лог на старте).
+
+    Проверка дешёвая и офлайновая: наличие бинаря или ключа, без запросов.
+    """
+    from . import config
+
+    name = config.backend()
+    if name == "claude-cli":
+        return "" if claude_path() else "claude CLI не найден"
+    from . import brain_api
+
+    return brain_api.probe(name)
+
+
+def available_brain() -> bool:
+    return not probe()

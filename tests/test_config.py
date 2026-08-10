@@ -87,12 +87,98 @@ def test_parse_tolerance():
     ok("= в значении цел", d.get("KEY3") == "a=b")
 
 
+def test_backend():
+    print("— выбор мозга —")
+    import os
+    os.environ.pop("TGAGENT_BACKEND", None)
+    cfg.persist("TGAGENT_BACKEND", "")
+    ok("по умолчанию claude-cli", cfg.backend() == "claude-cli")
+
+    cfg.persist("TGAGENT_BACKEND", "openai")
+    ok("читается из конфига", cfg.backend() == "openai")
+
+    os.environ["TGAGENT_BACKEND"] = "anthropic"
+    ok("окружение важнее конфига", cfg.backend() == "anthropic")
+
+    os.environ["TGAGENT_BACKEND"] = "ANTHROPIC"
+    ok("регистр не важен", cfg.backend() == "anthropic")
+
+    # опечатка не должна ронять бота — молча откатываемся на рабочий дефолт
+    os.environ["TGAGENT_BACKEND"] = "anthropik"
+    ok("неизвестное имя → claude-cli", cfg.backend() == "claude-cli")
+
+    os.environ.pop("TGAGENT_BACKEND", None)
+    cfg.persist("TGAGENT_BACKEND", "")
+
+
+def test_model_by_backend():
+    print("— модель зависит от мозга —")
+    import os
+    cfg.persist("TGAGENT_MODEL", "qwen3:8b")
+
+    os.environ["TGAGENT_BACKEND"] = "claude-cli"
+    ok("строгий мозг отбивает чужое имя", cfg.model() == cfg.DEFAULT_MODEL)
+    ok("и model_ok его не пускает", not cfg.model_ok("qwen3:8b"))
+    ok("а свой алиас пускает", cfg.model_ok("Opus"))
+    ok("нормализация к нижнему регистру", cfg.normalize_model("Opus") == "opus")
+
+    os.environ["TGAGENT_BACKEND"] = "openai"
+    ok("openai отдаёт имя как есть", cfg.model() == "qwen3:8b")
+    ok("и пускает любое непустое", cfg.model_ok("llama-3.3-70b-versatile"))
+    ok("пустое не пускает даже openai", not cfg.model_ok("   "))
+    ok("регистр у openai сохраняется", cfg.normalize_model("Qwen3:8B") == "Qwen3:8B")
+
+    os.environ.pop("TGAGENT_BACKEND", None)
+    cfg.persist("TGAGENT_MODEL", "")
+
+
+def test_api_credentials():
+    print("— ключи и адрес API —")
+    import os
+    for v in ("TGAGENT_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+              "TGAGENT_API_BASE", "TGAGENT_BACKEND"):
+        os.environ.pop(v, None)
+    cfg.persist("TGAGENT_API_KEY", "")
+    cfg.persist("ANTHROPIC_API_KEY", "")
+    cfg.persist("TGAGENT_API_BASE", "")
+
+    ok("нет ключа — пусто", cfg.api_key("anthropic") == "")
+
+    cfg.persist("ANTHROPIC_API_KEY", "из-конфига")
+    ok("ключ из конфига по имени провайдера", cfg.api_key("anthropic") == "из-конфига")
+
+    os.environ["ANTHROPIC_API_KEY"] = "из-окружения"
+    ok("окружение важнее конфига", cfg.api_key("anthropic") == "из-окружения")
+
+    os.environ["TGAGENT_API_KEY"] = "общий"
+    ok("общий ключ важнее всех", cfg.api_key("anthropic") == "общий")
+
+    ok("ключ чужого провайдера не подхватывается",
+       cfg.api_key("openai") == "общий")
+
+    os.environ.pop("TGAGENT_API_KEY", None)
+    os.environ.pop("ANTHROPIC_API_KEY", None)
+    ok("openai без ключа пуст", cfg.api_key("openai") == "")
+
+    ok("адрес по умолчанию пуст", cfg.api_base() == "")
+    cfg.persist("TGAGENT_API_BASE", "http://пк:11434/v1")
+    ok("адрес из конфига", cfg.api_base() == "http://пк:11434/v1")
+    os.environ["TGAGENT_API_BASE"] = "http://other:8000/v1"
+    ok("адрес из окружения важнее", cfg.api_base() == "http://other:8000/v1")
+    os.environ.pop("TGAGENT_API_BASE", None)
+    cfg.persist("TGAGENT_API_BASE", "")
+    cfg.persist("ANTHROPIC_API_KEY", "")
+
+
 test_roundtrip()
 test_injection()
 test_chat_id()
 test_model_validation()
 test_gemini_key()
 test_parse_tolerance()
+test_backend()
+test_model_by_backend()
+test_api_credentials()
 
 print(f"\nИтог: {len(PASS)} ✅ / {len(FAIL)} ❌")
 if FAIL:

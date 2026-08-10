@@ -5,11 +5,14 @@ child_env, гашение по коду возврата. Всё офлайн: P
 """
 import asyncio
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
 
 import tg_agent.brain as brain
+
+os.environ["TGAGENT_BACKEND"] = "claude-cli"   # пин движка: забытый в env бэкенд не должен менять эти тесты
 
 PASS, FAIL = [], []
 

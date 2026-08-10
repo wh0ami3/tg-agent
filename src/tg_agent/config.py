@@ -85,7 +85,12 @@ def chat_id() -> int | None:
 
 
 def model() -> str:
-    m = load().get("TGAGENT_MODEL", "").strip().lower()
+    m = load().get("TGAGENT_MODEL", "").strip()
+    if backend() == "openai":
+        # имя модели локального движка нам заранее неизвестно: qwen3:8b,
+        # llama-3.3-70b-versatile, anthropic/claude-sonnet-5 — отдаём как есть
+        return m
+    m = m.lower()
     return m if m in MODELS else DEFAULT_MODEL
 
 
@@ -96,3 +101,47 @@ def gemini_key() -> str:
         os.environ.get("GEMINI_API_KEY", "").strip()
         or _parse(GEMINI_ENV).get("GEMINI_API_KEY", "").strip()
     )
+
+
+# ─────────────────────────────── сменный мозг ────────────────────────────────
+BACKENDS = ("claude-cli", "anthropic", "openai")
+
+
+def backend() -> str:
+    """Какой мозг думает за агента.
+
+    Окружение поверх конфига — в systemd-юните переменной удобнее. Неизвестное
+    имя молча падает в claude-cli: у хозяина должен подниматься бот, а не
+    трейсбек из-за опечатки в одной букве.
+    """
+    b = (os.environ.get("TGAGENT_BACKEND", "").strip()
+         or load().get("TGAGENT_BACKEND", "").strip()).lower()
+    return b if b in BACKENDS else "claude-cli"
+
+
+def api_key(which: str = "") -> str:
+    """Ключ мозга. Читается В МОМЕНТ запроса — ротация без перезапуска."""
+    which = which or backend()
+    var = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}.get(which, "")
+    cfg = load()
+    return (os.environ.get("TGAGENT_API_KEY", "").strip()
+            or (os.environ.get(var, "").strip() if var else "")
+            or cfg.get("TGAGENT_API_KEY", "").strip()
+            or (cfg.get(var, "").strip() if var else ""))
+
+
+def api_base() -> str:
+    """Свой endpoint. Локальные движки: Ollama — http://ПК:11434/v1,
+    LM Studio — :1234/v1, vLLM — :8000/v1. Для anthropic — база БЕЗ /v1."""
+    return (os.environ.get("TGAGENT_API_BASE", "").strip()
+            or load().get("TGAGENT_API_BASE", "").strip())
+
+
+def model_ok(m: str) -> bool:
+    """claude-cli и anthropic знают только свои алиасы — «/model gpt-99»
+    по-прежнему отбивается. У openai имена произвольные, их задаёт движок."""
+    return bool(m.strip()) if backend() == "openai" else m.strip().lower() in MODELS
+
+
+def normalize_model(m: str) -> str:
+    return m.strip() if backend() == "openai" else m.strip().lower()

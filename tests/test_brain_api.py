@@ -9,6 +9,8 @@
 """
 import copy
 import os
+import platform
+import shutil
 import sys
 import tempfile
 import threading
@@ -23,7 +25,19 @@ import tg_agent.brain_api as ba
 brain.WORKDIR = Path(tempfile.mkdtemp(prefix="tg-agent-api-test-"))
 brain._session_env = lambda: {}       # герметичность: без реального systemctl
 
-PASS, FAIL = [], []
+PASS, FAIL, SKIP = [], [], []
+
+# Инструмент Bash завязан на POSIX: start_new_session, группы процессов,
+# killpg. На Windows этого нет вовсе — кроссплатформенный запуск команд это
+# этап 4, а не этап 2. setsid нет и на macOS.
+POSIX = os.name == "posix"
+HAS_BASH = bool(shutil.which("bash"))
+HAS_SETSID = bool(shutil.which("setsid"))
+
+
+def skip(name, why):
+    SKIP.append(name)
+    print(f"  ⏭ {name} — {why}")
 
 
 def ok(name, cond, extra=""):
@@ -84,6 +98,8 @@ def run(b, text="сделай", cont=False, events=None):
 # ──────────────────────────────── инструменты ────────────────────────────────
 def test_bash_basic():
     print("— Bash: базовое —")
+    if not (POSIX and HAS_BASH):
+        return skip("Bash: базовое", "нужен POSIX-шелл (этап 4)")
     b = FakeBrain()
     env = brain.child_env()
     dl = time.monotonic() + 60
@@ -113,6 +129,8 @@ def test_bash_background():
     """Слом №1 скептиков: communicate() ждал EOF на пайпе, а не смерти
     процесса — фоновой процесс держал шаг до TOOL_TIMEOUT."""
     print("— Bash: фоновой процесс не держит шаг —")
+    if not (POSIX and HAS_BASH):
+        return skip("Bash: фоновой процесс", "нужен POSIX-шелл")
     b = FakeBrain()
     env = brain.child_env()
     t0 = time.monotonic()
@@ -126,6 +144,8 @@ def test_bash_setsid_abort():
     """Слом №1, вторая половина: ушедший в свою сессию процесс переживал
     killpg, и /stop врал хозяину, вися до таймаута."""
     print("— Bash: /stop не ждёт сбежавший процесс —")
+    if not (POSIX and HAS_BASH and HAS_SETSID):
+        return skip("Bash: сбежавший процесс", "setsid есть только в Linux")
     b = FakeBrain()
     env = brain.child_env()
     base = b._stop_gen
@@ -148,6 +168,8 @@ def test_bash_setsid_abort():
 def test_bash_handshake():
     """Гонка: /stop прилетел ровно между Popen и регистрацией pid."""
     print("— Bash: рукопожатие со /stop —")
+    if not (POSIX and HAS_BASH):
+        return skip("Bash: рукопожатие", "нужен POSIX-шелл")
     b = FakeBrain()
     env = brain.child_env()
     base = b._stop_gen
@@ -164,6 +186,8 @@ def test_bash_handshake():
 
 def test_bash_timeout():
     print("— Bash: таймаут команды —")
+    if not (POSIX and HAS_BASH):
+        return skip("Bash: таймаут", "нужен POSIX-шелл")
     b = FakeBrain()
     old, ba.TOOL_TIMEOUT = ba.TOOL_TIMEOUT, 1
     try:
@@ -197,6 +221,8 @@ def test_whitelist():
     """Слом №2, пробой А4: галлюцинированный read_file с командой в аргументе
     исполнялся как shell — это канал инъекции через экран."""
     print("— белый список инструментов —")
+    if not (POSIX and HAS_BASH):
+        return skip("белый список", "нужен POSIX-шелл")
     b = FakeBrain()
     mark = Path(tempfile.mkdtemp(prefix="tg-wl-")) / "PWNED"
     call = ba._mkcall("x", "read_file", {"file_path": f"touch {mark}"}, "0")
@@ -223,6 +249,8 @@ def test_detail_not_arg():
 # ──────────────────────────────────── цикл ───────────────────────────────────
 def test_loop_basic():
     print("— цикл: инструмент → результат → финал —")
+    if not (POSIX and HAS_BASH):
+        return skip("цикл: базовый", "нужен POSIX-шелл")
     ev = []
     b = FakeBrain([
         turn(calls=[("Bash", {"command": "echo раз"})]),
@@ -239,6 +267,8 @@ def test_loop_basic():
 
 def test_loop_two_calls_one_turn():
     print("— два вызова в одном ходе —")
+    if not (POSIX and HAS_BASH):
+        return skip("цикл: два вызова", "нужен POSIX-шелл")
     b = FakeBrain([
         turn(calls=[("Bash", {"command": "echo a"}), ("Bash", {"command": "echo b"})]),
         turn(text="ок"),
@@ -266,6 +296,8 @@ def test_loop_stop_before_request():
 
 def test_loop_abort_from_progress():
     print("— /stop прямо во время вызова —")
+    if not (POSIX and HAS_BASH):
+        return skip("цикл: /stop", "нужен POSIX-шелл")
     b = FakeBrain([
         turn(calls=[("Bash", {"command": "echo раз"})]),
         turn(text="не должно дойти"),
@@ -286,6 +318,8 @@ def test_loop_abort_from_progress():
 def test_loop_repeat_guard():
     """Слом №2, пробой А5: модель делала 40 настоящих кликов подряд."""
     print("— детектор зацикливания —")
+    if not (POSIX and HAS_BASH):
+        return skip("детектор зацикливания", "нужен POSIX-шелл")
     same = ("Bash", {"command": "echo одно и то же"})
     b = FakeBrain([turn(calls=[same]) for _ in range(8)])
     try:
@@ -297,6 +331,8 @@ def test_loop_repeat_guard():
 
 def test_loop_per_turn_cap():
     print("— потолок вызовов за ход —")
+    if not (POSIX and HAS_BASH):
+        return skip("потолок вызовов", "нужен POSIX-шелл")
     many = [("Bash", {"command": f"echo {i}"}) for i in range(ba.MAX_PER_TURN + 5)]
     b = FakeBrain([turn(calls=many), turn(text="ок")])
     run(b)
@@ -308,6 +344,8 @@ def test_loop_per_turn_cap():
 
 def test_loop_max_steps():
     print("— потолок шагов —")
+    if not (POSIX and HAS_BASH):
+        return skip("потолок шагов", "нужен POSIX-шелл")
     old, ba.MAX_STEPS = ba.MAX_STEPS, 3
     try:
         b = FakeBrain([turn(calls=[("Bash", {"command": f"echo {i}"})]) for i in range(3)])
@@ -334,6 +372,8 @@ def test_loop_empty_final():
 def test_loop_text_toolcall():
     """Слом №2, пробой А1: вызов текстом отдавался хозяину сырым XML."""
     print("— вызов инструмента пришёл текстом —")
+    if not (POSIX and HAS_BASH):
+        return skip("вызов текстом", "нужен POSIX-шелл")
     b = FakeBrain([
         turn(text='<tool_call>{"name":"Bash","arguments":{"command":"echo текстом"}}</tool_call>'),
         turn(text="ок"),
@@ -364,6 +404,8 @@ def test_loop_deadline():
 # ─────────────────────────────────── история ─────────────────────────────────
 def test_history_roundtrip():
     print("— история переживает рестарт —")
+    if not (POSIX and HAS_BASH):
+        return skip("история: рестарт", "нужен POSIX-шелл")
     b = FakeBrain([turn(calls=[("Bash", {"command": "echo раз"})]), turn(text="первый")])
     run(b, "задача один", cont=False)
 
@@ -490,7 +532,8 @@ def main():
     test_history_broken_file()
     test_history_foreign_api()
     test_reset_clears()
-    print(f"\nИтог: {len(PASS)} ✅ / {len(FAIL)} ❌")
+    tail = f" / {len(SKIP)} ⏭ ({platform.system()})" if SKIP else ""
+    print(f"\nИтог: {len(PASS)} ✅ / {len(FAIL)} ❌{tail}")
     if FAIL:
         print("Провалены:", FAIL)
         sys.exit(1)

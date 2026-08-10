@@ -1,0 +1,48 @@
+name: tests
+
+# Три ОС на настоящем железе. Смысл именно в Windows и macOS: руки там
+# работают из коробки, а проверить их на Arch-ноутбуке автора нечем.
+# Тесты гоняют pyautogui заглушкой, поэтому курсор нигде не двигается и
+# раннеру не нужен графический сеанс.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false          # падение на одной ОС не должно прятать другие
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Установить зависимости (вместе с руками)
+        run: uv sync --extra hands
+
+      - name: Руки — самопроверка
+        # Не гейт: на раннере нет графического сеанса, и честный отказ здесь
+        # ожидаем. Смотрим глазами, что сообщение внятное, а не трейсбек.
+        run: uv run tg-agent-hands selftest
+        continue-on-error: true
+
+      - name: Тесты
+        shell: bash
+        run: |
+          set -o pipefail
+          fail=0
+          for t in tests/test_*.py; do
+            echo "──────── $t"
+            uv run python "$t" || fail=1
+          done
+          exit $fail

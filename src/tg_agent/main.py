@@ -19,7 +19,7 @@ import signal
 import time
 import traceback
 
-from . import brain, config, paths, stt
+from . import brain, config, console_utf8, paths, stt
 from .telegram import AgentBot
 
 
@@ -46,6 +46,7 @@ async def _main(bot: AgentBot) -> None:
 
 
 def run() -> None:
+    console_utf8()
     paths.ensure()
     token = config.token()
     if not token:

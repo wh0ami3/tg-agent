@@ -256,6 +256,70 @@ def test_cli_contract():
         C.Hands = orig
 
 
+def test_console_utf8():
+    """Консоль Windows по умолчанию cp1252: печать русского сообщения об
+    ошибке роняла CLI ровно там, где человеку нужен текст."""
+    print("— вывод не-ASCII не роняет CLI —")
+    from tg_agent import console_utf8
+
+    class Cp1252:
+        """Поток, умеющий только латиницу — как консоль Windows.
+        Не наследуем io.TextIOBase: там encoding только для чтения."""
+
+        def __init__(self):
+            self.encoding = "cp1252"
+            self.buf = []
+            self.reconfigured = False
+
+        def reconfigure(self, encoding=None, errors=None):
+            self.encoding, self.reconfigured = encoding, True
+
+        def write(self, s):
+            if self.encoding != "utf-8":
+                s.encode("cp1252")      # как настоящий поток — бросит
+            self.buf.append(s)
+            return len(s)
+
+        def flush(self):
+            pass
+
+    try:
+        Cp1252().write("привет")
+        ok("контроль: cp1252-поток действительно падает", False)
+    except UnicodeEncodeError:
+        ok("контроль: cp1252-поток действительно падает", True)
+
+    real_out, real_err = sys.stdout, sys.stderr
+    out, err = Cp1252(), Cp1252()
+    sys.stdout, sys.stderr = out, err
+    try:
+        console_utf8()
+        print("русское сообщение")
+    finally:
+        sys.stdout, sys.stderr = real_out, real_err
+    ok("stdout переведён в utf-8", out.reconfigured and out.encoding == "utf-8")
+    ok("stderr тоже", err.reconfigured)
+    ok("и русский текст прошёл", any("русское" in x for x in out.buf), str(out.buf))
+
+    # поток без reconfigure (перенаправление в кастомный объект) не должен ронять
+    class Dumb:
+        def write(self, s):
+            return len(s)
+
+        def flush(self):
+            pass
+
+    sys.stdout, sys.stderr = Dumb(), Dumb()
+    try:
+        console_utf8()
+        crashed = False
+    except Exception:
+        crashed = True
+    finally:
+        sys.stdout, sys.stderr = real_out, real_err
+    ok("поток без reconfigure не роняет", not crashed)
+
+
 def test_cli_screenshot_prints_path_last():
     print("— путь к снимку последней строкой —")
     import io
@@ -279,6 +343,7 @@ def main():
     test_typing()
     test_screenshot()
     test_cli_contract()
+    test_console_utf8()
     test_cli_screenshot_prints_path_last()
     print(f"\nИтог: {len(PASS)} ✅ / {len(FAIL)} ❌")
     if FAIL:

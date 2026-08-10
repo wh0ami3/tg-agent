@@ -38,6 +38,10 @@ jobs:
 
       - name: Тесты
         shell: bash
+        env:
+          # Консоль Windows по умолчанию cp1252 — русские сообщения тестов
+          # падали бы UnicodeEncodeError ещё до первой проверки.
+          PYTHONIOENCODING: utf-8
         run: |
           set -o pipefail
           fail=0

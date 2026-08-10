@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from .. import console_utf8
 from .backend import Hands, HandsUnavailable, current_platform, selftest
 
 EXIT_OK = 0
@@ -69,6 +70,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    console_utf8()
     args = _parser().parse_args(argv)
 
     if args.cmd == "selftest":

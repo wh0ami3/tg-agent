@@ -43,10 +43,15 @@ jobs:
           # падали бы UnicodeEncodeError ещё до первой проверки.
           PYTHONIOENCODING: utf-8
         run: |
-          set -o pipefail
           fail=0
           for t in tests/test_*.py; do
             echo "──────── $t"
-            uv run python "$t" || fail=1
+            # код возврата печатаем ВСЕГДА: тест может отчитаться «0 ❌» и всё
+            # равно уйти ненулевым (падение при завершении интерпретатора),
+            # и без этой строки виновника в логе не видно
+            uv run python "$t"
+            rc=$?
+            echo "──────── $t → код $rc"
+            [ $rc -eq 0 ] || fail=1
           done
           exit $fail

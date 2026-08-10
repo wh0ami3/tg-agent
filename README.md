@@ -83,11 +83,11 @@ silently ignored — no error message, no acknowledgement.
 
 ## Tests
 
-154 assertions across 5 suites, all passing:
+159 assertions across 5 suites, all passing:
 
 ```
 tests/test_telegram.py    52
-tests/test_brain.py       43
+tests/test_brain.py       48
 tests/test_strings.py     26
 tests/test_config.py      20
 tests/test_stt.py         13

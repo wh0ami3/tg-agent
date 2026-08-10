@@ -92,6 +92,15 @@ def test_system_style():
     s = brain.SYSTEM_STYLE
     ok("clickon в приоритете", "clickon" in s)
     ok("подсказка «сверься, не долби»", "do NOT" in s and "CENTRE" in s)
+    # скорость: агент не должен снимать экран после каждого действия —
+    # локальный прицел clickon сам подтверждает попадание
+    ok("clickon объявлен дефолтом", "DEFAULT way" in s)
+    ok("явный запрет снимков на каждое действие",
+       "not screenshot after every action" in s)
+    ok("clickon не требует снимка до и после",
+       "NOT need a screenshot before" in s and "NOT need one after" in s)
+    ok("клавиатура предпочтительнее мыши, где быстрее", "ctrl+l" in s)
+    ok("снимок только при откате на координаты", "raw coordinates" in s)
     ok("протокол [PHOTO:]", "[PHOTO:" in s)
     ok("вставка длинного текста", "pasted" in s)
     ok("ответ для Telegram", "Telegram" in s)
